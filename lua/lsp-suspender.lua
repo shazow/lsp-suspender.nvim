@@ -9,6 +9,7 @@ local M = {}
 
 local augroup = vim.api.nvim_create_augroup("LspSuspender", { clear = true })
 
+local suspended = false;
 local last_updated = 0;
 local timer;
 
@@ -33,12 +34,17 @@ local function update()
   end
 end
 
-local function requested(args)
+local function requested(_)
   last_updated = time()
+
+  if suspended then
+    M.resume_lsp()
+  end
 end
 
 function M.status()
   print(vim.inspect({
+    suspended = suspended,
     last_updated = last_updated,
     last_updated_str = (time() - last_updated) .. " seconds ago",
     config = config,
@@ -47,8 +53,16 @@ end
 
 function M.suspend_lsp()
   print("Suspend LSP")
+  suspended = true
   -- TODO: Remains as an exercise for the reader
 end
+
+function M.resume_lsp()
+  print("Resume LSP")
+  suspended = false
+  -- TODO: Do the rest of the owl
+end
+  
 
 function M.stop()
   if timer then
