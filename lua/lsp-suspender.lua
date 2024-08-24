@@ -47,6 +47,7 @@ end
 
 function M.suspend_lsp()
   print("Suspend LSP")
+  -- TODO: Remains as an exercise for the reader
 end
 
 function M.stop()
