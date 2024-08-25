@@ -6,6 +6,7 @@
 -- Fetch pid??
 -- Use https://github.com/neovim/neovim/issues/14504#issuecomment-833940045
 -- vim.lsp config.before_init callback gets initialized_params, can override process_id?
+-- https://github.com/neovim/neovim/issues/14430
 local M = {}
 
 local augroup = vim.api.nvim_create_augroup("LspSuspender", { clear = true })
