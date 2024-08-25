@@ -11,28 +11,25 @@ local M = {}
 local augroup = vim.api.nvim_create_augroup("LspSuspender", { clear = true })
 
 local suspended = false;
+local stopped_clients = {}
 local last_updated = 0;
 local timer;
 
-local config = {
-  poll_interval = 1000 * 5,  -- 5 seconds,
-  suspend_after = 1000 * 10, -- 10 seconds
-  --suspend_after = 1000 * 60 * 1, -- 1 minute
+--- @class Config
+local default_config = {
+  poll_interval = 5,  -- 5 seconds,
+  suspend_after = 10, -- 10 seconds
+  --suspend_after = 60 * 1, -- 1 minute
+
+  resume_events = {"InsertEnter"} -- More sensitive: {"FocusGained","BufEnter","CursorHold","CursorHoldI"}
 }
+
+--- @type Config
+local config = nil
+
 
 local function time()
   return vim.fn.localtime()
-end
-
-local function main()
-  print("Hello from our plugin")
-end
-
-local function update()
-  local now = time()
-  if now - last_updated > config.suspend_after then
-    M.suspend_lsp()
-  end
 end
 
 local function requested(_)
@@ -40,7 +37,26 @@ local function requested(_)
 
   if suspended then
     M.resume_lsp()
+    M.start()
   end
+end
+
+local function update()
+  local now = time()
+  if now - last_updated < config.suspend_after then
+    return
+  end
+
+  M.suspend_lsp()
+  M.stop()
+
+  vim.api.nvim_create_autocmd(config.resume_events, {
+    group = augroup,
+    once = true,
+    callback = function()
+      requested()
+    end
+  })
 end
 
 local function list_lsp_processes()
@@ -68,15 +84,27 @@ function M.status()
 end
 
 function M.suspend_lsp()
-  print("Suspend LSP")
   suspended = true
-  -- TODO: Remains as an exercise for the reader
+  stopped_clients = vim.lsp.get_clients();
+  vim.notify("[lsp-suspender] Suspending LSP: " .. #stopped_clients .. " clients")
+  for _, client in ipairs(stopped_clients) do
+    vim.lsp.stop_client(client)
+  end
 end
 
 function M.resume_lsp()
-  print("Resume LSP")
+  if not suspended then
+    vim.notify("[lsp-suspender] Resume skipped, not suspended")
+    return
+  end
+
+  -- Print how many clients are being resumed
+  vim.notify("[lsp-suspender] Resuming LSP: " .. #stopped_clients .. " clients")
   suspended = false
-  -- TODO: Do the rest of the owl
+
+  for _, client in ipairs(stopped_clients) do
+    vim.lsp.start_client(client)
+  end
 end
 
 function M.stop()
@@ -90,7 +118,6 @@ function M.start()
   last_updated = time()
 
   if timer then
-    print('timer already runing, closing first')
     M.stop()
   end
 
@@ -99,21 +126,23 @@ function M.start()
 
   local i = 0
   timer:start(0, config.poll_interval, vim.schedule_wrap(function()
-    print('timer invoked! i=' .. tostring(i))
-
     update()
-
-    i = i + 1
   end))
 
   return timer
 end
 
-function M.setup()
-  vim.api.nvim_create_autocmd("LspAttach",
-    { group = augroup, desc = "Monitor LSP usage to suspend and resume processes", once = true, callback = main })
+function M.setup(opts)
+  if config then
+    vim.notify("[lsp-suspender] config is already set", vim.log.levels.WARN)
+  end
+
+  -- Merge opts into configs
+  config = vim.tbl_deep_extend("force", default_config, opts or {})
 
   vim.api.nvim_create_autocmd("LspNotify", { group = augroup, callback = requested })
+
+  M.start()
 end
 
 return M;
